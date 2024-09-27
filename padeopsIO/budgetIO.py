@@ -950,6 +950,46 @@ class BudgetIO():
             print('BudgetIO loaded the budget fields at TIDX:' + '{:.06f}'.format(tidx))
 
 
+    def _read_budgets_padeops_2d(self, key_subset, tidx):
+        """
+        Uses a method similar to ReadVelocities_Budget() in PadeOpsViz to read and store full-field budget terms.
+        """
+        if tidx is None:
+            if self.budget or  self.budget_tidx is not None:  # empty dictionary evaluates to False in python
+                # if there are budgets loaded, continue loading from that TIDX
+                tidx = self.budget_tidx
+            else:
+                # load budgets from the last available TIDX
+                tidx = self.unique_budget_tidx(return_last=True)
+
+        elif tidx not in self.all_budget_tidx:
+            # find the nearest that actually exists
+            tidx_arr = np.array(self.all_budget_tidx)
+            closest_tidx = tidx_arr[np.argmin(np.abs(tidx_arr-tidx))]
+
+            print("Requested budget tidx={:d} could not be found. Using tidx={:d} instead.".format(tidx, closest_tidx))
+            tidx = closest_tidx
+
+        if self.verbose:
+            print(f'Loading budgets {list(key_subset.keys())} from {tidx}')
+
+        # these lines are almost verbatim from PadeOpsViz.py
+        for key in key_subset:
+            budget, term = BudgetIO.key[key]
+
+            searchstr =  self.dir_name + '/Run{:02d}_budget{:01d}_term{:02d}_t{:06d}_*.s2D'.format(self.runid, budget, term, tidx)
+            u_fname = glob.glob(searchstr)[0]
+
+            self.budget_n = int(re.findall('.*_t\d+_n(\d+)', u_fname)[0])  # extract n from string
+            self.budget_tidx = tidx  # update self.budget_tidx
+
+            temp = np.fromfile(u_fname, dtype=np.dtype(np.float64), count=-1)
+            self.budget[key] = temp.reshape((self.ny,self.nz), order='F')  # reshape into a 3D array
+
+        if self.verbose and len(key_subset) > 0:
+            print('BudgetIO loaded the budget fields at TIDX:' + '{:.06f}'.format(tidx))
+
+
     def _read_budgets_npz(self, key_subset, mmap=None): 
         """
         Reads budgets written by .write_npz() and loads them into memory
